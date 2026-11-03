@@ -1,0 +1,272 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Staff & access ----------
+
+enum StaffRole {
+  MANAGER
+  HOST
+  SERVER
+  KITCHEN
+}
+
+model Staff {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         StaffRole
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  orders       Order[]
+}
+
+// ---------- Customers & loyalty ----------
+
+enum Tier {
+  MEMBER
+  SILVER
+  GOLD
+}
+
+model Customer {
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  phone         String?
+  passwordHash  String?
+  tier          Tier          @default(MEMBER)
+  points        Int           @default(0) // spendable balance
+  lifetimePoints Int          @default(0) // drives tier
+  lifetimeSpend Decimal       @default(0) @db.Decimal(12, 2)
+  visits        Int           @default(0)
+  lastVisitAt   DateTime?
+  createdAt     DateTime      @default(now())
+  orders        Order[]
+  reservations  Reservation[]
+  ledger        PointsLedger[]
+}
+
+// Manager-editable rules for each tier
+model TierRule {
+  tier             Tier    @id
+  minLifetimePoints Int
+  discountPercent  Decimal @db.Decimal(5, 2)
+  pointsMultiplier Decimal @db.Decimal(4, 2)
+  perks            String[]
+  color            String  @default("#a1a1aa")
+}
+
+model PointsLedger {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId    String?
+  delta      Int
+  reason     String
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+// ---------- Floor ----------
+
+enum TableStatus {
+  AVAILABLE
+  SEATED
+  ORDERED
+  NEEDS_ATTENTION
+  RESERVED
+  CLEANING
+}
+
+enum TableShape {
+  ROUND
+  SQUARE
+  RECT
+  BOOTH
+}
+
+model Table {
+  id          String        @id @default(cuid())
+  label       String        @unique
+  seats       Int
+  section     String        @default("Main")
+  shape       TableShape    @default(SQUARE)
+  posX        Int           @default(0) // floor plan grid position
+  posY        Int           @default(0)
+  status      TableStatus   @default(AVAILABLE)
+  code        String        @unique // used in the customer QR link
+  guests      Int?
+  seatedAt    DateTime?
+  active      Boolean       @default(true)
+  orders      Order[]
+  reservations Reservation[]
+}
+
+enum ReservationStatus {
+  BOOKED
+  SEATED
+  CANCELLED
+  NO_SHOW
+}
+
+model Reservation {
+  id         String            @id @default(cuid())
+  name       String
+  phone      String?
+  partySize  Int
+  time       DateTime
+  notes      String?
+  status     ReservationStatus @default(BOOKED)
+  tableId    String?
+  table      Table?            @relation(fields: [tableId], references: [id])
+  customerId String?
+  customer   Customer?         @relation(fields: [customerId], references: [id])
+  createdAt  DateTime          @default(now())
+
+  @@index([time])
+}
+
+// ---------- Menu ----------
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+  items     MenuItem[]
+}
+
+model MenuItem {
+  id          String      @id @default(cuid())
+  name        String
+  description String      @default("")
+  price       Decimal     @db.Decimal(10, 2)
+  imageUrl    String?
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id])
+  tags        String[]    // e.g. vegan, gf, spicy
+  available   Boolean     @default(true)
+  prepMinutes Int         @default(15)
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  specials    ChefSpecial[]
+  orderItems  OrderItem[]
+}
+
+model ChefSpecial {
+  id          String    @id @default(cuid())
+  menuItemId  String
+  menuItem    MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  headline    String
+  note        String    @default("")
+  specialPrice Decimal? @db.Decimal(10, 2)
+  minTier     Tier      @default(MEMBER) // e.g. GOLD-only specials
+  startsAt    DateTime  @default(now())
+  endsAt      DateTime?
+  active      Boolean   @default(true)
+}
+
+// ---------- Orders & payments ----------
+
+enum OrderStatus {
+  PLACED
+  PREPARING
+  READY
+  SERVED
+  PAID
+  CANCELLED
+}
+
+enum OrderSource {
+  CUSTOMER
+  STAFF
+}
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  number      Int         @default(autoincrement())
+  type        OrderType   @default(DINE_IN)
+  status      OrderStatus @default(PLACED)
+  source      OrderSource
+  tableId     String?
+  table       Table?      @relation(fields: [tableId], references: [id])
+  customerId  String?
+  customer    Customer?   @relation(fields: [customerId], references: [id])
+  staffId     String?
+  staff       Staff?      @relation(fields: [staffId], references: [id])
+  guestName   String?
+  notes       String?
+  subtotal    Decimal     @db.Decimal(10, 2)
+  discount    Decimal     @default(0) @db.Decimal(10, 2)
+  tax         Decimal     @db.Decimal(10, 2)
+  tip         Decimal     @default(0) @db.Decimal(10, 2)
+  total       Decimal     @db.Decimal(10, 2)
+  pointsRedeemed Int      @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  paidAt      DateTime?
+  items       OrderItem[]
+  payments    Payment[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ItemStatus {
+  QUEUED
+  COOKING
+  DONE
+}
+
+model OrderItem {
+  id         String     @id @default(cuid())
+  orderId    String
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id])
+  name       String
+  unitPrice  Decimal    @db.Decimal(10, 2)
+  quantity   Int
+  notes      String?
+  status     ItemStatus @default(QUEUED)
+}
+
+enum PaymentMethod {
+  CARD_ONLINE
+  CARD_TERMINAL
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id])
+  amount      Decimal       @db.Decimal(10, 2)
+  tip         Decimal       @default(0) @db.Decimal(10, 2)
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+  provider    String        // stripe | simulated | manual
+  providerRef String?       @unique
+  createdAt   DateTime      @default(now())
+}

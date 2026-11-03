@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  @apply bg-stone-50 text-ink font-sans antialiased;
+}
+
+h1,
+h2,
+h3 {
+  @apply font-display tracking-tight;
+}
+
+:focus-visible {
+  outline: 2px solid #c9a24a;
+  outline-offset: 2px;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-forest-800 text-stone-50 hover:bg-forest-700;
+  }
+  .btn-brass {
+    @apply btn bg-brass text-forest-950 hover:bg-brass-light;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-current hover:bg-black/5;
+  }
+  .btn-outline {
+    @apply btn border border-stone-300 bg-white text-ink hover:border-stone-400;
+  }
+  .input {
+    @apply w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-stone-400 focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-stone-600;
+  }
+
+  /* Staff screens run dark: easier on the eyes in a dim dining room. */
+  .staff .input {
+    @apply border-forest-600 bg-forest-900 text-stone-50 placeholder:text-stone-500 focus:border-brass focus:ring-brass/20;
+  }
+  .staff .label {
+    @apply text-stone-400;
+  }
+  .staff .btn-outline {
+    @apply border-forest-600 bg-forest-800 text-stone-100 hover:border-stone-500;
+  }
+  .staff .btn-ghost {
+    @apply hover:bg-white/5;
+  }
+  .panel {
+    @apply rounded-2xl border border-forest-700 bg-forest-900;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
